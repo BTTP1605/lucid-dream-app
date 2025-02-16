@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/lucid-dream-app/static/css/main.15fd0301.css",
+    "main.js": "/lucid-dream-app/static/js/main.5066aaa8.js",
+    "static/js/453.83401df5.chunk.js": "/lucid-dream-app/static/js/453.83401df5.chunk.js",
+    "index.html": "/lucid-dream-app/index.html",
+    "main.15fd0301.css.map": "/lucid-dream-app/static/css/main.15fd0301.css.map",
+    "main.5066aaa8.js.map": "/lucid-dream-app/static/js/main.5066aaa8.js.map",
+    "453.83401df5.chunk.js.map": "/lucid-dream-app/static/js/453.83401df5.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.15fd0301.css",
+    "static/js/main.5066aaa8.js"
+  ]
+}
