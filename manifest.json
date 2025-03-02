@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "明晰夢誘導",
+  "name": "明晰夢誘導アプリ",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +20,9 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#1a1a2e",
+  "background_color": "#16213e",
+  "orientation": "portrait",
+  "categories": ["utilities", "lifestyle"],
+  "description": "明晰夢を見る確率を高めるためのアファメーション音声を再生するアプリ"
 }
