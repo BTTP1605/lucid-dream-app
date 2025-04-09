@@ -7,6 +7,8 @@ const urlsToCache = [
   '/static/js/0.chunk.js',
   '/static/js/bundle.js',
   '/audio/affirmation.mp3',
+  '/audio/affirmation-male.mp3',
+  '/audio/binaural-beats.mp3',
   '/manifest.json'
 ];
 
