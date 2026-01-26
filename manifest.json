@@ -1,6 +1,6 @@
 {
-  "short_name": "明晰夢誘導",
-  "name": "明晰夢誘導アプリ",
+  "short_name": "React App",
+  "name": "Create React App Sample",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,50 +10,16 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "any maskable"
+      "sizes": "192x192"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
+      "sizes": "512x512"
     }
   ],
   "start_url": ".",
-  "scope": "./",
   "display": "standalone",
-  "theme_color": "#1a1a2e",
-  "background_color": "#16213e",
-  "orientation": "portrait",
-  "categories": ["utilities", "lifestyle"],
-  "description": "明晰夢を見る確率を高めるためのアファメーション音声を再生するアプリ",
-  "shortcuts": [
-    {
-      "name": "即時再生",
-      "short_name": "再生",
-      "description": "アファメーションを即時再生します",
-      "url": "./?quickstart=true",
-      "icons": [{ "src": "play-icon.png", "sizes": "192x192" }]
-    }
-  ],
-  "related_applications": [],
-  "prefer_related_applications": false,
-  "screenshots": [
-    {
-      "src": "screenshot1.png",
-      "sizes": "1280x720",
-      "type": "image/png"
-    }
-  ],
-  "lang": "ja-JP",
-  "dir": "ltr",
-  "display_override": ["standalone", "window-controls-overlay"],
-  "id": "lucid-dream-app",
-  "launch_handler": {
-    "client_mode": ["focus-existing", "auto"]
-  },
-  "edge_side_panel": {
-    "preferred_width": 400
-  }
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
 }
