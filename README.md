@@ -1,5 +1,9 @@
 # Getting Started with Create React App
 
+## Production Safety / 本番環境について
+
+本番URL `https://bttp1605.github.io/lucid-dream-app/` は、操夢部会員が使用中の本番環境です。`gh-pages` ブランチや本番deployには直接触れず、変更は作業用ブランチで行い、まず `lucid-dream-app-dev` のテスト環境で確認してください。
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
