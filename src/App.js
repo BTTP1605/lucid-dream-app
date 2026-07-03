@@ -5,7 +5,7 @@ import { saveRecording, getAllRecordings } from './services/RecordingService';
 
 // Constants
 const DELAY_PRESETS = [0, 1, 5, 10, 15, 30, 45, 60];
-const DURATION_PRESETS = [1, 5, 10, 30, 45, 60, 90];
+const DURATION_PRESETS = [1, 5, 10, 30, 45, 60, 90, 120];
 const AUDIO_OPTIONS = [
   { id: 'affirmation-female', name: 'アファメーション(女性)', file: 'affirmation.mp3' },
   { id: 'affirmation-male', name: 'アファメーション(男性)', file: 'affirmation-male.mp3' },
