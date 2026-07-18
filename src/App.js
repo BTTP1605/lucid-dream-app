@@ -44,10 +44,19 @@ function App() {
   const micStreamRef = useRef(null);
   const wakeLockRef = useRef(null);
   const appStateRef = useRef(APP_STATE.IDLE);
+  const volumeRef = useRef(volume);
 
   useEffect(() => {
     appStateRef.current = appState;
   }, [appState]);
+
+  // 音量スライダーの変更を再生中のAudioにも即時反映する
+  useEffect(() => {
+    volumeRef.current = volume;
+    if (audioRef.current && appStateRef.current === APP_STATE.PLAYING) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
 
   // --- Initialization ---
   useEffect(() => {
@@ -89,7 +98,10 @@ function App() {
       if (recs.length > 0) {
         const latest = recs[recs.length - 1];
         const url = URL.createObjectURL(latest.blob);
-        setCustomAudioUrl(url);
+        setCustomAudioUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
         if (autoSelect) setSelectedAudioId('my-recording');
         return true;
       }
@@ -136,6 +148,15 @@ function App() {
     }
   };
 
+  // 再生に失敗したら「再生中」のまま放置せず、全停止して待機状態へ戻す
+  const handlePlaybackFailure = (error, audio) => {
+    console.error("Audio playback FAILED:", error);
+    if (audio) console.error("Target Source:", audio.src);
+    stopAll();
+    setAppState(APP_STATE.IDLE);
+    alert("音声を再生できませんでした。もう一度「誘導を開始する」を押してください。\n(ブラウザの自動再生制限や、音声ファイルの読み込み失敗が原因の可能性があります)");
+  };
+
   const stopAll = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     endTimeRef.current = null;
@@ -145,6 +166,12 @@ function App() {
       audioRef.current.pause();
       audioRef.current = null;
     }
+    // 録音中なら先にレコーダーを止めてから(データを確定させてから)マイクを解放する
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      try { mediaRecorderRef.current.stop(); } catch (_) { /* 既に停止済みなら無視 */ }
+    }
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(track => track.stop());
       micStreamRef.current = null;
@@ -192,10 +219,7 @@ function App() {
       if (playPromise !== undefined) {
         playPromise
           .then(() => console.log("Immediate playback started successfully."))
-          .catch(error => {
-            console.error("Immediate playback FAILED:", error);
-            console.error("Target Source:", audio.src);
-          });
+          .catch(error => handlePlaybackFailure(error, audio));
       }
 
       startCountdown(playDurationMins * 60, handleProgramEnd);
@@ -211,8 +235,8 @@ function App() {
           .then(() => {
             audio.pause();
             audio.currentTime = 0;
-            audio.volume = volume; // Restore for later
-            console.log(`[Audio] Unlocked and Volume pre-set to: ${volume}`);
+            audio.volume = volumeRef.current; // Restore for later (最新のスライダー値)
+            console.log(`[Audio] Unlocked and Volume pre-set to: ${volumeRef.current}`);
           })
           .catch(error => {
             console.error("Audio unlock FAILED (Unlock phase):", error);
@@ -234,16 +258,15 @@ function App() {
 
     // Reuse the same instance (Constraint #1)
     if (audioRef.current) {
-      const playPromise = audioRef.current.play();
+      const audio = audioRef.current;
+      audio.volume = volumeRef.current; // 遅延中にスライダーが動かされた場合も最新値で再生
+      const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
             console.log("Audio playing successfully.");
           })
-          .catch(error => {
-            console.error("Audio playback FAILED (Final phase):", error);
-            console.error("Target Source:", audioRef.current.src);
-          });
+          .catch(error => handlePlaybackFailure(error, audio));
       }
     }
 
@@ -289,6 +312,10 @@ function App() {
 
       // 停止時の処理
       mediaRecorder.onstop = () => {
+        // 結果にかかわらず必ず最初にマイクを解放する
+        stream.getTracks().forEach(track => track.stop());
+        if (micStreamRef.current === stream) micStreamRef.current = null;
+
         // 実際に録音された形式で Blob を作る（iOS では audio/mp4 になる）
         const blobType = mediaRecorder.mimeType || supportedType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
@@ -296,19 +323,21 @@ function App() {
 
         if (audioBlob.size === 0) {
           console.error("Critical Error: Recorded Blob is empty!");
+          alert("録音に失敗しました(音声データが空です)。もう一度お試しください。");
           return;
         }
 
         const audioUrl = URL.createObjectURL(audioBlob);
-        setCustomAudioUrl(audioUrl); // Stateに保存
+        // 前の録音のObject URLは解放してから差し替える
+        setCustomAudioUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return audioUrl;
+        });
         setSelectedAudioId('my-recording'); // 「自分の録音」を選択済みにする
 
-        // マイク解放
-        stream.getTracks().forEach(track => track.stop());
-        micStreamRef.current = null;
-
         // Save to IndexedDB (as a backup/optional)
-        saveRecording(audioBlob, `録音 ${new Date().toLocaleTimeString()}`);
+        saveRecording(audioBlob, `録音 ${new Date().toLocaleTimeString()}`)
+          .catch((e) => console.error("録音のIndexedDB保存に失敗(再生には影響なし):", e));
       };
 
       mediaRecorder.start();
@@ -317,7 +346,14 @@ function App() {
 
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      alert("マイクへのアクセスが拒否されました。設定を確認してください。");
+      // getUserMedia成功後にMediaRecorder作成/開始で失敗した場合もマイクを確実に解放する
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(track => track.stop());
+        micStreamRef.current = null;
+      }
+      mediaRecorderRef.current = null;
+      setIsRecording(false);
+      alert("録音を開始できませんでした。マイクへのアクセス許可を確認してください。");
     }
   };
 
@@ -399,6 +435,7 @@ function App() {
           <button
             className={`btn-record ${isRecording ? 'recording' : ''}`}
             onClick={isRecording ? stopRecording : startRecording}
+            disabled={appState !== APP_STATE.IDLE}
           >
             <div className={`recording-dot ${isRecording ? 'active' : ''}`}></div>
             {isRecording ? '■ 録音を停止して保存' : '● 録音する'}
