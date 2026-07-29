@@ -1,0 +1,16 @@
+# /app/lucid-dream/.htaccess  (デプロイスクリプトが配置する)
+
+# ページ本体はPHPゲート経由でのみ配信する
+DirectoryIndex index.php
+
+# 万一 index.html が残っていても直アクセスさせない(実体は _private にある)
+<Files "index.html">
+  Require all denied
+</Files>
+
+# CRAのビルドはファイル名にハッシュが入るため、静的アセットは長期キャッシュ可
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
