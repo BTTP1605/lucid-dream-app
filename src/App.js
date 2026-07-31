@@ -34,7 +34,6 @@ function App() {
   const [delayMins, setDelayMins] = useState(30);
   const [playDurationMins, setPlayDurationMins] = useState(5);
   const [selectedAudioId, setSelectedAudioId] = useState(DEFAULT_AUDIO_ID);
-  const [volume, setVolume] = useState(0.5);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [customAudioUrl, setCustomAudioUrl] = useState(null);
@@ -50,19 +49,10 @@ function App() {
   const micStreamRef = useRef(null);
   const wakeLockRef = useRef(null);
   const appStateRef = useRef(APP_STATE.IDLE);
-  const volumeRef = useRef(volume);
 
   useEffect(() => {
     appStateRef.current = appState;
   }, [appState]);
-
-  // 音量スライダーの変更を再生中のAudioにも即時反映する
-  useEffect(() => {
-    volumeRef.current = volume;
-    if (audioRef.current && appStateRef.current === APP_STATE.PLAYING) {
-      audioRef.current.volume = volume;
-    }
-  }, [volume]);
 
   // --- Initialization ---
   useEffect(() => {
@@ -71,7 +61,6 @@ function App() {
     if (saved) {
       setDelayMins(saved.delayMins ?? 30);
       setPlayDurationMins(saved.playDurationMins ?? 5);
-      setVolume(saved.volume ?? 0.5);
       // 「自分の録音」は録音データの存在確認が済むまで復元しない
       if (savedAudioId !== 'my-recording') setSelectedAudioId(savedAudioId);
     }
@@ -243,12 +232,11 @@ function App() {
     audio.loop = true;
     audioRef.current = audio;
 
-    saveSettings({ delayMins, playDurationMins, selectedAudioId, volume });
+    saveSettings({ delayMins, playDurationMins, selectedAudioId });
 
     if (delayMins === 0) {
       // --- Case A: Immediate Start ---
       console.log("[Audio] Immediate Start: No unlock/pause cycle needed.");
-      audio.volume = volume;
 
       setAppState(APP_STATE.PLAYING);
       requestWakeLock();
@@ -275,8 +263,7 @@ function App() {
             audio.pause();
             audio.currentTime = 0;
             audio.muted = false;
-            audio.volume = volumeRef.current; // Restore for later (最新のスライダー値)
-            console.log(`[Audio] Unlocked and Volume pre-set to: ${volumeRef.current}`);
+            console.log('[Audio] Unlocked.');
           })
           .catch(error => {
             console.error("Audio unlock FAILED (Unlock phase):", error);
@@ -304,7 +291,6 @@ function App() {
       const audio = audioRef.current;
       audio.muted = false;
       audio.currentTime = 0; // アファメーションを必ず頭から流す
-      audio.volume = volumeRef.current; // 遅延中にスライダーが動かされた場合も最新値で再生
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
@@ -468,7 +454,7 @@ function App() {
           ))}
         </div>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '10px', lineHeight: 1.6 }}>
-          4.5〜6時間は、入眠から約4時間半〜5時間後の「二度寝」を狙う設定です(明け方に明晰夢を見やすいとされる時間帯)。
+          4.5時間～6時間は、入眠から4時間半～5時間後の明け方の「二度寝」を狙う設定です
         </p>
       </div>
 
@@ -528,20 +514,7 @@ function App() {
         </div>
       </div>
 
-      {/* 4. Volume Control */}
-      <div className="section">
-        <div className="section-title">🎚️ 音量 ({Math.round(volume * 100)}%)</div>
-        <div className="volume-control">
-          <span>🔈</span>
-          <input
-            type="range" min="0" max="1" step="0.01"
-            value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))}
-          />
-          <span>🔊</span>
-        </div>
-      </div>
-
-      {/* 5. Main Action Area */}
+      {/* 4. Main Action Area */}
       <div className="section timer-card" style={{ border: '2px solid var(--primary-color)' }}>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '600' }}>
           {getStatusText()}

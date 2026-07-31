@@ -139,32 +139,6 @@ body {
   color: var(--text-secondary);
 }
 
-/* Volume Slider */
-.volume-control {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 10px;
-}
-
-input[type="range"] {
-  flex: 1;
-  height: 6px;
-  background: #1e293b;
-  border-radius: 3px;
-  appearance: none;
-  outline: none;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--primary-color);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
 /* Main Timer & Controls */
 .timer-card {
   text-align: center;
