@@ -4,7 +4,8 @@ import { saveSettings, getSettings } from './services/StorageService';
 import { saveRecording, getAllRecordings } from './services/RecordingService';
 
 // Constants
-const DELAY_PRESETS = [0, 1, 5, 10, 15, 30, 45, 60];
+// 270〜360分は、入眠から4.5〜6時間後の二度寝(WBTB)を狙うための選択肢
+const DELAY_PRESETS = [0, 1, 5, 10, 15, 30, 45, 60, 270, 300, 330, 360];
 const DURATION_PRESETS = [1, 5, 10, 30, 45, 60, 90, 120];
 const AUDIO_OPTIONS = [
   { id: 'affirmation-female', name: 'アファメーション(女性)', file: 'affirmation.mp3' },
@@ -366,9 +367,21 @@ function App() {
   };
 
   const formatTime = (s) => {
-    const mins = Math.floor(s / 60);
+    const hours = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
     const secs = s % 60;
+    if (hours > 0) {
+      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // 60分以上は「4.5時間」のように時間表記にする
+  const formatDelayLabel = (m) => {
+    if (m === 0) return '即時';
+    if (m < 60) return `${m}分`;
+    const hours = m / 60;
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}時間`;
   };
 
   const getStatusText = () => {
@@ -398,10 +411,13 @@ function App() {
               onClick={() => appState === APP_STATE.IDLE && setDelayMins(m)}
               disabled={appState !== APP_STATE.IDLE}
             >
-              {m === 0 ? '即時' : `${m}分`}
+              {formatDelayLabel(m)}
             </button>
           ))}
         </div>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '10px', lineHeight: 1.6 }}>
+          4.5〜6時間は、入眠から約4時間半〜5時間後の「二度寝」を狙う設定です(明け方に明晰夢を見やすいとされる時間帯)。
+        </p>
       </div>
 
       {/* 2. Audio Selection */}
@@ -479,7 +495,7 @@ function App() {
           {getStatusText()}
         </div>
         <div className="time-display">
-          {appState === APP_STATE.IDLE ? `${delayMins}:00` : formatTime(timeLeft)}
+          {appState === APP_STATE.IDLE ? formatTime(delayMins * 60) : formatTime(timeLeft)}
         </div>
         {appState !== APP_STATE.IDLE ? (
           <button className="main-btn btn-stop" onClick={stopProgram}>誘導を停止する</button>
