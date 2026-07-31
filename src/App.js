@@ -14,6 +14,10 @@ const AUDIO_OPTIONS = [
 ];
 const DEFAULT_AUDIO_ID = 'affirmation-female';
 
+// 遅延中に鳴らし続ける無音ファイル。再生中は端末が「音を出している」状態になるため、
+// 画面を消してもブラウザがページを停止せず、長時間の遅延でもタイマーが生き残る。
+const KEEP_ALIVE_FILE = 'silence.mp3';
+
 // 録音形式: ブラウザが対応するものを優先順に選ぶ（iOS Safari は webm 非対応で mp4 になる）
 const RECORDING_MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
 
@@ -40,6 +44,7 @@ function App() {
   const endTimeRef = useRef(null);
   const onCountdownEndRef = useRef(null);
   const audioRef = useRef(null);
+  const keepAliveRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const micStreamRef = useRef(null);
@@ -163,6 +168,7 @@ function App() {
     endTimeRef.current = null;
     onCountdownEndRef.current = null;
     releaseWakeLock();
+    stopKeepAlive();
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
@@ -176,6 +182,37 @@ function App() {
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(track => track.stop());
       micStreamRef.current = null;
+    }
+  };
+
+  // --- Keep-alive (遅延中のバックグラウンド維持) ---
+  // 開始ボタン(ユーザー操作)の中で呼ぶこと。無音とはいえ再生開始には操作が必要。
+  const startKeepAlive = () => {
+    const keepAlive = new Audio(`${process.env.PUBLIC_URL}/audio/${KEEP_ALIVE_FILE}`);
+    keepAlive.loop = true;
+    keepAlive.playsInline = true;
+    keepAliveRef.current = keepAlive;
+    const p = keepAlive.play();
+    if (p !== undefined) {
+      p.then(() => console.log('[KeepAlive] started'))
+        .catch(error => console.error('[KeepAlive] failed to start:', error));
+    }
+    // ロック画面に出る再生情報。誤操作を減らすため何を再生中か明示する
+    if ('mediaSession' in navigator && window.MediaMetadata) {
+      try {
+        navigator.mediaSession.metadata = new window.MediaMetadata({
+          title: '明晰夢誘導アプリ',
+          artist: '開始時刻まで待機中'
+        });
+      } catch (_) { /* 未対応環境は無視 */ }
+    }
+  };
+
+  const stopKeepAlive = () => {
+    if (keepAliveRef.current) {
+      keepAliveRef.current.pause();
+      keepAliveRef.current = null;
+      console.log('[KeepAlive] stopped');
     }
   };
 
@@ -228,7 +265,8 @@ function App() {
     } else {
       // --- Case B: Delayed Start ---
       console.log("[Audio] Delayed Start: Unlocking audio via Play -> Pause.");
-      audio.volume = 0;
+      // iOS は volume を無視するため、アンロック時の音漏れは muted で防ぐ
+      audio.muted = true;
 
       const unlockPromise = audio.play();
       if (unlockPromise !== undefined) {
@@ -236,6 +274,7 @@ function App() {
           .then(() => {
             audio.pause();
             audio.currentTime = 0;
+            audio.muted = false;
             audio.volume = volumeRef.current; // Restore for later (最新のスライダー値)
             console.log(`[Audio] Unlocked and Volume pre-set to: ${volumeRef.current}`);
           })
@@ -244,6 +283,9 @@ function App() {
             console.error("Target Source:", audio.src);
           });
       }
+
+      // 遅延中は無音を鳴らし続けてページの停止を防ぐ(ユーザー操作の中で開始する必要がある)
+      startKeepAlive();
 
       setAppState(APP_STATE.DELAY);
       // 遅延中も画面ロックでタイマーが止まらないよう Wake Lock を取得する
@@ -260,15 +302,25 @@ function App() {
     // Reuse the same instance (Constraint #1)
     if (audioRef.current) {
       const audio = audioRef.current;
+      audio.muted = false;
+      audio.currentTime = 0; // アファメーションを必ず頭から流す
       audio.volume = volumeRef.current; // 遅延中にスライダーが動かされた場合も最新値で再生
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
             console.log("Audio playing successfully.");
+            // 本再生が始まってから止める。先に止めると音が途切れ、
+            // OSに再生セッションを回収されて再生できなくなることがある
+            stopKeepAlive();
           })
-          .catch(error => handlePlaybackFailure(error, audio));
+          .catch(error => {
+            stopKeepAlive();
+            handlePlaybackFailure(error, audio);
+          });
       }
+    } else {
+      stopKeepAlive();
     }
 
     requestWakeLock();
