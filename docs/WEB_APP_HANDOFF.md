@@ -119,6 +119,8 @@ lucid-dream-app/
 - **保存先:** `/app/_private/lucid-dream/sessions-YYYY-MM.jsonl` と `answers-YYYY-MM.jsonl`。追記のみなので同時アクセスで壊れない。
 - **認証:** 会員Cookieを流用(`require_app`)。APIは会員でなければ403。
 - **GitHub Pages版では機能を表示しない**(APIがないため。`isSurveySupported()`がホスト名で判定)。
+- **集計ダッシュボード:** `/app/lucid-dream/survey-stats.php`(オーナー専用)。初回は `?k=<admin_key>` を付けて開くと管理者Cookie(1年・`/app/`共通)が発行される。遅延・音声・再生時間ごとの成功率、日別推移、自由回答の一覧を表示。
+- 会員向けの告知文は `docs/会員告知_アンケート機能.md`。
 
 ---
 
