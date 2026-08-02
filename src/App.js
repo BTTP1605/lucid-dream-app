@@ -2,6 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { saveSettings, getSettings } from './services/StorageService';
 import { saveRecording, getAllRecordings } from './services/RecordingService';
+import {
+  CHOICES,
+  NOTE_MAX,
+  isSurveySupported,
+  getConsent,
+  setConsent,
+  targetMorningFor,
+  queueSession,
+  flushOutbox,
+  fetchPending,
+  submitAnswer
+} from './services/SurveyService';
 
 // Constants
 // 270〜360分は、入眠から4.5〜6時間後の二度寝(WBTB)を狙うための選択肢
@@ -38,6 +50,14 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [customAudioUrl, setCustomAudioUrl] = useState(null);
 
+  // --- アンケート(任意参加) ---
+  const [surveyConsent, setSurveyConsent] = useState(null);   // 'yes' | 'no' | null
+  const [pendingSurvey, setPendingSurvey] = useState(null);
+  const [surveyChoice, setSurveyChoice] = useState(null);
+  const [surveyNote, setSurveyNote] = useState('');
+  const [surveyStatus, setSurveyStatus] = useState('idle');   // idle | sending | done | error
+  const surveySupported = isSurveySupported();
+
   // --- Refs ---
   const timerRef = useRef(null);
   const endTimeRef = useRef(null);
@@ -70,13 +90,20 @@ function App() {
       }
     });
 
+    // アンケート: 同意済みなら未送信の使用記録を送り、未回答の質問を取りに行く
+    const consent = surveySupported ? getConsent() : 'no';
+    setSurveyConsent(consent);
+    if (consent === 'yes') refreshSurvey();
+
     // タブ復帰時: Wake Lock は画面消灯で失効するため再取得し、残り時間を即時再計算する
+    // 朝アプリに戻ってきたときに質問を出したいので、アンケートもここで確認する
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
       if (appStateRef.current !== APP_STATE.IDLE) {
         requestWakeLock();
         syncCountdown();
       }
+      if (getConsent() === 'yes') refreshSurvey();
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -86,6 +113,49 @@ function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // --- アンケート ---
+  const refreshSurvey = async () => {
+    if (!surveySupported) return;
+    try {
+      await flushOutbox();
+      const pending = await fetchPending();
+      setPendingSurvey(pending);
+      if (pending) {
+        setSurveyChoice(null);
+        setSurveyNote('');
+        setSurveyStatus('idle');
+      }
+    } catch (error) {
+      // 通信できないだけなら次の機会に。質問は出さない
+      console.warn('[Survey] 取得できませんでした:', error.message);
+    }
+  };
+
+  const handleConsent = (value) => {
+    setConsent(value);
+    setSurveyConsent(value);
+    if (value === 'yes') refreshSurvey();
+    else setPendingSurvey(null);
+  };
+
+  const handleSubmitAnswer = async () => {
+    if (!surveyChoice || !pendingSurvey) return;
+    setSurveyStatus('sending');
+    try {
+      await submitAnswer({
+        targetMorning: pendingSurvey.targetMorning,
+        choice: surveyChoice,
+        note: surveyNote
+      });
+      setSurveyStatus('done');
+      // まだ未回答の朝が残っていれば続けて質問する
+      setTimeout(refreshSurvey, 1200);
+    } catch (error) {
+      console.error('[Survey] 送信に失敗:', error);
+      setSurveyStatus('error');
+    }
+  };
 
   const loadLatestRecording = async (autoSelect = false) => {
     try {
@@ -233,6 +303,16 @@ function App() {
     audioRef.current = audio;
 
     saveSettings({ delayMins, playDurationMins, selectedAudioId });
+
+    // アンケートに参加中なら、その晩の使用を記録する(翌朝の質問対象になる)
+    if (surveySupported && getConsent() === 'yes') {
+      queueSession({
+        targetMorning: targetMorningFor(),
+        delayMins,
+        playDurationMins,
+        audioId: selectedAudioId
+      }).catch(error => console.warn('[Survey] 記録を保留しました:', error.message));
+    }
 
     if (delayMins === 0) {
       // --- Case A: Immediate Start ---
@@ -438,6 +518,68 @@ function App() {
         <h1>明晰夢誘導アプリ</h1>
       </header>
 
+      {/* 0. 翌朝の質問(アンケート参加者のみ) */}
+      {surveySupported && surveyConsent === 'yes' && pendingSurvey && (
+        <div className="section survey-card">
+          {surveyStatus === 'done' ? (
+            <div className="survey-thanks">ご回答ありがとうございました。</div>
+          ) : (
+            <>
+              <div className="section-title">🌙 昨夜の結果を教えてください</div>
+              <p className="survey-question">
+                昨夜、このアプリを使って明晰夢に成功しましたか？
+              </p>
+              <div className="survey-choices">
+                {CHOICES.map(c => (
+                  <button
+                    key={c.id}
+                    className={`btn-audio ${surveyChoice === c.id ? 'active' : ''}`}
+                    onClick={() => setSurveyChoice(c.id)}
+                    disabled={surveyStatus === 'sending'}
+                  >
+                    <div>{c.label}</div>
+                  </button>
+                ))}
+              </div>
+
+              {surveyChoice === 'other' && (
+                <div className="survey-note">
+                  <textarea
+                    value={surveyNote}
+                    onChange={(e) => setSurveyNote(e.target.value.slice(0, NOTE_MAX))}
+                    placeholder="どんな夢だったか、気づいたことなど"
+                    rows={3}
+                    maxLength={NOTE_MAX}
+                  />
+                  <div className="survey-count">{surveyNote.length} / {NOTE_MAX}</div>
+                </div>
+              )}
+
+              {surveyStatus === 'error' && (
+                <p className="survey-error">送信できませんでした。通信状況を確認してもう一度お試しください。</p>
+              )}
+
+              <div className="survey-actions">
+                <button
+                  className="main-btn btn-start"
+                  onClick={handleSubmitAnswer}
+                  disabled={!surveyChoice || surveyStatus === 'sending'}
+                >
+                  {surveyStatus === 'sending' ? '送信中...' : '回答する'}
+                </button>
+                <button
+                  className="survey-later"
+                  onClick={() => setPendingSurvey(null)}
+                  disabled={surveyStatus === 'sending'}
+                >
+                  あとで
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* 1. Delay Settings */}
       <div className="section">
         <div className="section-title">⏱️ 開始までの遅延</div>
@@ -533,6 +675,41 @@ function App() {
           </p>
         )}
       </div>
+
+      {/* 5. アンケート参加の案内 */}
+      {surveySupported && (
+        <div className="section survey-consent">
+          {surveyConsent === null && (
+            <>
+              <div className="section-title">📊 結果の記録に協力しませんか？</div>
+              <p>
+                翌朝に「明晰夢に成功したか」をお聞きし、そのときの設定(遅延・音声・再生時間)と一緒に記録します。
+                どの設定が効果的かを調べるために使います。
+              </p>
+              <p className="survey-privacy">
+                送信されるのは端末ごとの匿名の番号と回答だけです。お名前などは送りません。
+                参加はいつでもやめられます。
+              </p>
+              <div className="survey-actions">
+                <button className="main-btn btn-start" onClick={() => handleConsent('yes')}>協力する</button>
+                <button className="survey-later" onClick={() => handleConsent('no')}>協力しない</button>
+              </div>
+            </>
+          )}
+          {surveyConsent === 'yes' && (
+            <p className="survey-status">
+              📊 結果の記録に協力中です。
+              <button className="survey-link" onClick={() => handleConsent('no')}>やめる</button>
+            </p>
+          )}
+          {surveyConsent === 'no' && (
+            <p className="survey-status">
+              📊 結果の記録には参加していません。
+              <button className="survey-link" onClick={() => handleConsent('yes')}>協力する</button>
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
