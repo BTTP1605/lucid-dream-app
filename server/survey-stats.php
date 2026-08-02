@@ -80,8 +80,8 @@ function delay_label(int $m): string {
   if ($m < 0) return '不明';
   if ($m === 0) return '即時';
   if ($m < 60) return $m . '分';
-  $h = $m / 60;
-  return (floor($h) === $h ? (string) (int) $h : number_format($h, 1)) . '時間';
+  // アプリ側の表示に合わせる(1時間 / 4.5時間 のように、割り切れれば整数)
+  return ($m % 60 === 0 ? (string) intdiv($m, 60) : number_format($m / 60, 1)) . '時間';
 }
 
 function pct(int $n, int $total): float {
